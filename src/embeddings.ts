@@ -1,9 +1,9 @@
-// ABOUTME: Local embedding service using transformers for semantic journal search
+// ABOUTME: Local embedding service using pluggable providers for semantic journal search
 // ABOUTME: Provides text embedding generation and similarity computation utilities
 
-import { pipeline, FeatureExtractionPipeline } from '@xenova/transformers';
 import * as fs from 'fs/promises';
-import * as path from 'path';
+import { EmbeddingProvider } from './providers';
+import { TransformersProvider } from './transformers-provider';
 
 export interface EmbeddingData {
   embedding: number[];
@@ -11,14 +11,13 @@ export interface EmbeddingData {
   sections: string[];
   timestamp: number;
   path: string;
-  version?: string;      // "minilm-l6-v2" | "mpnet-base-v2"
-  dimensions?: number;   // 384 | 768
+  version?: string;
+  dimensions?: number;
 }
 
 export class EmbeddingService {
   private static instance: EmbeddingService;
-  private extractor: FeatureExtractionPipeline | null = null;
-  private readonly modelName = 'Xenova/all-MiniLM-L6-v2';
+  private provider: EmbeddingProvider | null = null;
   private initPromise: Promise<void> | null = null;
 
   private constructor() {}
@@ -30,42 +29,54 @@ export class EmbeddingService {
     return EmbeddingService.instance;
   }
 
+  get currentVersion(): string {
+    return this.provider?.version || 'minilm-l6-v2';
+  }
+
+  get currentDimensions(): number {
+    return this.provider?.dimensions || 384;
+  }
+
   async initialize(): Promise<void> {
     if (this.initPromise) {
       return this.initPromise;
     }
-
     this.initPromise = this.doInitialize();
     return this.initPromise;
   }
 
   private async doInitialize(): Promise<void> {
+    this.provider = await this.selectProvider();
+    await this.provider.initialize();
+  }
+
+  private async selectProvider(): Promise<EmbeddingProvider> {
+    // Try ONNX provider first (if available)
     try {
-      console.error('Loading embedding model...');
-      this.extractor = await pipeline('feature-extraction', this.modelName);
-      console.error('Embedding model loaded successfully');
-    } catch (error) {
-      console.error('Failed to load embedding model:', error);
-      throw error;
+      // @ts-ignore - onnx-provider is optional and may not exist yet
+      const { OnnxProvider } = await import('./onnx-provider');
+      const onnx = new OnnxProvider();
+      if (await onnx.isAvailable()) {
+        console.error('ONNX Runtime detected, using GPU-accelerated embeddings');
+        return onnx;
+      }
+    } catch {
+      // onnxruntime-node not installed, fall through
     }
+
+    // Default to transformers.js
+    console.error('Using default transformers.js embeddings');
+    return new TransformersProvider();
   }
 
   async generateEmbedding(text: string): Promise<number[]> {
-    if (!this.extractor) {
+    if (!this.provider) {
       await this.initialize();
     }
-
-    if (!this.extractor) {
-      throw new Error('Embedding model not initialized');
+    if (!this.provider) {
+      throw new Error('Embedding provider not initialized');
     }
-
-    try {
-      const result = await this.extractor(text, { pooling: 'mean', normalize: true });
-      return Array.from(result.data);
-    } catch (error) {
-      console.error('Failed to generate embedding:', error);
-      throw error;
-    }
+    return this.provider.generateEmbedding(text);
   }
 
   cosineSimilarity(a: number[], b: number[]): number {
@@ -97,38 +108,32 @@ export class EmbeddingService {
 
   async loadEmbedding(filePath: string): Promise<EmbeddingData | null> {
     const embeddingPath = filePath.replace(/\.md$/, '.embedding');
-    
+
     try {
       const content = await fs.readFile(embeddingPath, 'utf8');
       return JSON.parse(content);
     } catch (error) {
       if ((error as any)?.code === 'ENOENT') {
-        return null; // File doesn't exist
+        return null;
       }
       throw error;
     }
   }
 
   extractSearchableText(markdownContent: string): { text: string; sections: string[] } {
-    // Remove YAML frontmatter
     const withoutFrontmatter = markdownContent.replace(/^---\n.*?\n---\n/s, '');
-    
-    // Extract sections
+
     const sections: string[] = [];
     const sectionMatches = withoutFrontmatter.match(/^## (.+)$/gm);
     if (sectionMatches) {
       sections.push(...sectionMatches.map(match => match.replace('## ', '')));
     }
 
-    // Clean up markdown for embedding
     const cleanText = withoutFrontmatter
-      .replace(/^## .+$/gm, '') // Remove section headers
-      .replace(/\n{3,}/g, '\n\n') // Normalize whitespace
+      .replace(/^## .+$/gm, '')
+      .replace(/\n{3,}/g, '\n\n')
       .trim();
 
-    return {
-      text: cleanText,
-      sections
-    };
+    return { text: cleanText, sections };
   }
 }

@@ -2,7 +2,23 @@
 // ABOUTME: Validates provider contract and backward compatibility with legacy embeddings
 
 import { EmbeddingProvider, getEmbeddingDimensions, isLegacyEmbedding } from '../src/providers';
+import { TransformersProvider } from '../src/transformers-provider';
 import { EmbeddingData } from '../src/embeddings';
+
+describe('TransformersProvider', () => {
+  test('has correct metadata', () => {
+    const provider = new TransformersProvider();
+    expect(provider.name).toBe('transformers.js');
+    expect(provider.version).toBe('minilm-l6-v2');
+    expect(provider.dimensions).toBe(384);
+  });
+
+  test('reports as available', async () => {
+    const provider = new TransformersProvider();
+    const available = await provider.isAvailable();
+    expect(available).toBe(true);
+  });
+});
 
 describe('EmbeddingProvider interface', () => {
   test('legacy embeddings without version field are detected', () => {
