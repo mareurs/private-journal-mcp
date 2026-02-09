@@ -201,7 +201,9 @@ ${sections.join('\n\n')}
         text,
         sections,
         timestamp: timestamp.getTime(),
-        path: filePath
+        path: filePath,
+        version: this.embeddingService.currentVersion,
+        dimensions: this.embeddingService.currentDimensions,
       };
 
       await this.embeddingService.saveEmbedding(filePath, embeddingData);
