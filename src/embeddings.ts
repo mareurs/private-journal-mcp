@@ -11,6 +11,8 @@ export interface EmbeddingData {
   sections: string[];
   timestamp: number;
   path: string;
+  version?: string;      // "minilm-l6-v2" | "mpnet-base-v2"
+  dimensions?: number;   // 384 | 768
 }
 
 export class EmbeddingService {
