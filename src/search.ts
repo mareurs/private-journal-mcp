@@ -47,9 +47,6 @@ export class SearchService {
       type = 'both'
     } = options;
 
-    // Generate query embedding
-    const queryEmbedding = await this.embeddingService.generateEmbedding(query);
-
     // Collect all embeddings
     const allEmbeddings: Array<EmbeddingData & { type: 'project' | 'user' }> = [];
 
@@ -65,17 +62,15 @@ export class SearchService {
 
     // Filter by criteria
     const filtered = allEmbeddings.filter(embedding => {
-      // Filter by sections if specified
       if (sections && sections.length > 0) {
-        const hasMatchingSection = sections.some(section => 
-          embedding.sections.some(embeddingSection => 
+        const hasMatchingSection = sections.some(section =>
+          embedding.sections.some(embeddingSection =>
             embeddingSection.toLowerCase().includes(section.toLowerCase())
           )
         );
         if (!hasMatchingSection) return false;
       }
 
-      // Filter by date range
       if (dateRange) {
         const entryDate = new Date(embedding.timestamp);
         if (dateRange.start && entryDate < dateRange.start) return false;
@@ -85,27 +80,39 @@ export class SearchService {
       return true;
     });
 
-    // Calculate similarities and sort
-    const results: SearchResult[] = filtered
-      .map(embedding => {
-        const score = this.embeddingService.cosineSimilarity(queryEmbedding, embedding.embedding);
-        const excerpt = this.generateExcerpt(embedding.text, query);
-        
-        return {
-          path: embedding.path,
-          score,
-          text: embedding.text,
-          sections: embedding.sections,
-          timestamp: embedding.timestamp,
-          excerpt,
-          type: embedding.type
-        };
-      })
-      .filter(result => result.score >= minScore)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, limit);
+    // Group embeddings by dimension for correct comparison
+    const dimGroups = new Map<number, Array<EmbeddingData & { type: 'project' | 'user' }>>();
+    for (const emb of filtered) {
+      const dim = emb.embedding.length;
+      if (!dimGroups.has(dim)) dimGroups.set(dim, []);
+      dimGroups.get(dim)!.push(emb);
+    }
 
-    return results;
+    // Generate query embedding and compare only against same-dimension entries
+    const queryEmbedding = await this.embeddingService.generateEmbedding(query);
+    const results: SearchResult[] = [];
+
+    for (const [dim, embeddings] of dimGroups) {
+      if (queryEmbedding.length !== dim) continue;
+
+      for (const embedding of embeddings) {
+        const score = this.embeddingService.cosineSimilarity(queryEmbedding, embedding.embedding);
+        if (score >= minScore) {
+          results.push({
+            path: embedding.path,
+            score,
+            text: embedding.text,
+            sections: embedding.sections,
+            timestamp: embedding.timestamp,
+            excerpt: this.generateExcerpt(embedding.text, query),
+            type: embedding.type
+          });
+        }
+      }
+    }
+
+    results.sort((a, b) => b.score - a.score);
+    return results.slice(0, limit);
   }
 
   async listRecent(options: SearchOptions = {}): Promise<SearchResult[]> {
