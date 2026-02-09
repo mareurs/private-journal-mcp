@@ -53,7 +53,6 @@ export class EmbeddingService {
   private async selectProvider(): Promise<EmbeddingProvider> {
     // Try ONNX provider first (if available)
     try {
-      // @ts-ignore - onnx-provider is optional and may not exist yet
       const { OnnxProvider } = await import('./onnx-provider');
       const onnx = new OnnxProvider();
       if (await onnx.isAvailable()) {

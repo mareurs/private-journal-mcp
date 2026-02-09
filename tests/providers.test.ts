@@ -52,3 +52,38 @@ describe('EmbeddingProvider interface', () => {
     expect(getEmbeddingDimensions('mpnet-base-v2')).toBe(768);
   });
 });
+
+describe('OnnxProvider', () => {
+  test('has correct metadata', async () => {
+    const { OnnxProvider } = await import('../src/onnx-provider');
+    const provider = new OnnxProvider();
+    expect(provider.name).toBe('onnxruntime');
+    expect(provider.version).toBe('mpnet-base-v2');
+    expect(provider.dimensions).toBe(768);
+  });
+
+  test('reports availability based on onnxruntime-node', async () => {
+    const { OnnxProvider } = await import('../src/onnx-provider');
+    const provider = new OnnxProvider();
+    const available = await provider.isAvailable();
+    expect(typeof available).toBe('boolean');
+  });
+
+  test('generates 768-dimensional embeddings', async () => {
+    const { OnnxProvider } = await import('../src/onnx-provider');
+    const provider = new OnnxProvider();
+
+    if (!(await provider.isAvailable())) {
+      console.warn('Skipping: onnxruntime-node not available');
+      return;
+    }
+
+    await provider.initialize();
+    const embedding = await provider.generateEmbedding('Test text about programming');
+
+    expect(embedding).toHaveLength(768);
+
+    const norm = Math.sqrt(embedding.reduce((sum, val) => sum + val * val, 0));
+    expect(norm).toBeCloseTo(1.0, 3);
+  }, 120000);
+});
