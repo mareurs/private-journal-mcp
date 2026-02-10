@@ -122,8 +122,9 @@ For faster and more accurate embeddings, you can enable GPU acceleration:
 
 ### Requirements
 
-- NVIDIA GPU with CUDA 11.8+ or 12.x
+- NVIDIA GPU with CUDA 12.x
 - CUDA toolkit installed (`nvidia-smi` working)
+- cuDNN 9 (`sudo apt install nvidia-cudnn` on Ubuntu/Debian)
 - ~500MB disk space for model cache
 
 ### Setup
