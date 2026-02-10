@@ -33,35 +33,30 @@ export class OnnxProvider implements EmbeddingProvider {
   async initialize(): Promise<void> {
     this.ort = require('onnxruntime-node');
 
-    const providers = await this.getAvailableProviders();
-    const hasCuda = providers.includes('CUDAExecutionProvider');
-
-    if (hasCuda) {
-      console.error('CUDA available, using GPU-accelerated embeddings');
-    } else {
-      console.error('CUDA not available, ONNX will use CPU');
-    }
-
     await this.ensureModel();
 
     const modelPath = path.join(this.modelDir, 'model.onnx');
-    const sessionOptions: any = {
-      graphOptimizationLevel: 'all',
-    };
 
-    if (hasCuda) {
-      sessionOptions.executionProviders = [
-        { name: 'CUDAExecutionProvider' },
-        { name: 'CPUExecutionProvider' },
-      ];
+    // Try CUDA first, fall back to CPU
+    let usedGpu = false;
+    try {
+      this.session = await this.ort.InferenceSession.create(modelPath, {
+        executionProviders: ['cuda', 'cpu'],
+      });
+      usedGpu = true;
+      console.error('CUDA available, using GPU-accelerated embeddings');
+    } catch {
+      // CUDA not available (missing cuDNN, no GPU, etc.) - fall back to CPU
+      this.session = await this.ort.InferenceSession.create(modelPath, {
+        executionProviders: ['cpu'],
+      });
+      console.error('CUDA not available, ONNX will use CPU');
     }
-
-    this.session = await this.ort.InferenceSession.create(modelPath, sessionOptions);
 
     const { AutoTokenizer } = await import('@xenova/transformers');
     this.tokenizer = await AutoTokenizer.from_pretrained(this.modelId);
 
-    console.error(`ONNX provider initialized (${hasCuda ? 'GPU' : 'CPU'})`);
+    console.error(`ONNX provider initialized (${usedGpu ? 'GPU' : 'CPU'})`);
   }
 
   async generateEmbedding(text: string): Promise<number[]> {
@@ -125,14 +120,6 @@ export class OnnxProvider implements EmbeddingProvider {
     const norm = Math.sqrt(embedding.reduce((sum, val) => sum + val * val, 0));
     if (norm === 0) return embedding;
     return embedding.map(val => val / norm);
-  }
-
-  private async getAvailableProviders(): Promise<string[]> {
-    try {
-      return this.ort.InferenceSession.availableExecutionProviders?.() || ['CPUExecutionProvider'];
-    } catch {
-      return ['CPUExecutionProvider'];
-    }
   }
 
   private async ensureModel(): Promise<void> {
