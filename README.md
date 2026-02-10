@@ -116,6 +116,40 @@ I'm excited about this new search feature...
 Vector embeddings provide semantic understanding...
 ```
 
+## GPU Acceleration (Optional)
+
+For faster and more accurate embeddings, you can enable GPU acceleration:
+
+### Requirements
+
+- NVIDIA GPU with CUDA 11.8+ or 12.x
+- CUDA toolkit installed (`nvidia-smi` working)
+- ~500MB disk space for model cache
+
+### Setup
+
+Install the optional ONNX Runtime dependency:
+
+```bash
+npm install onnxruntime-node
+```
+
+The server will automatically detect the GPU and use the `all-mpnet-base-v2` model (768 dimensions) instead of the default `all-MiniLM-L6-v2` (384 dimensions).
+
+### Migration
+
+To upgrade existing embeddings to the new model:
+
+```bash
+npx github:obra/private-journal-mcp --migrate-embeddings
+```
+
+This is optional - old and new embeddings coexist peacefully. Search only compares entries with matching dimensions.
+
+### Fallback
+
+If CUDA is not available, ONNX Runtime falls back to CPU. If `onnxruntime-node` is not installed, the default transformers.js backend is used.
+
 ## Development
 
 ### Building
