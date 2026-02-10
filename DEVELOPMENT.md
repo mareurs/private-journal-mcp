@@ -120,13 +120,11 @@ Cosine similarity works across different dimensions - we just need to ensure we'
 3. Should migration be automatic? **NO - optional CLI flag only**
 4. What's the fallback chain? **ONNX+CUDA → ONNX+CPU → transformers.js**
 
-## Next Steps
+## Status
 
-1. Review this approach with user
-2. Create detailed implementation plan
-3. Set up git worktree for isolated development
-4. Implement with TDD approach
-5. Ensure all existing tests pass
-6. Add new tests for GPU features
-7. Update documentation
-8. Create PR with clear backward compatibility story
+**Implementation complete.** All 8 tasks done, 42/42 tests passing, GPU acceleration verified on RTX A5000.
+
+## TODO
+
+- [ ] Test with private-journal MCP enabled across projects (both `~/.claude` and `~/.claude-sdd` profiles)
+- [ ] Create PR to upstream (`obra/private-journal-mcp`) once testing is complete
